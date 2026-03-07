@@ -14,3 +14,9 @@ Thumbs.db
 *.bin
 *.hex
 *.map
+
+# Secrets — never commit
+firmware/src/secrets.h
+
+# Ignore build logs
+build*.log

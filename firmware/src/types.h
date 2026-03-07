@@ -93,10 +93,10 @@ struct SystemHealth {
         lastRestartReason = 0;
 
         // Configure per-task timeouts
-        tasks[static_cast<size_t>(TaskId::SENSOR)].timeoutMs    = WDT_TIMEOUT_SENSOR;
-        tasks[static_cast<size_t>(TaskId::LORA)].timeoutMs      = WDT_TIMEOUT_LORA;
-        tasks[static_cast<size_t>(TaskId::WEBSERVER)].timeoutMs  = WDT_TIMEOUT_WEBSERVER;
-        tasks[static_cast<size_t>(TaskId::DISPLAY)].timeoutMs    = WDT_TIMEOUT_DISPLAY;
+        tasks[static_cast<size_t>(TaskId::SENSOR)].timeoutMs         = WDT_TIMEOUT_SENSOR;
+        tasks[static_cast<size_t>(TaskId::LORA)].timeoutMs           = WDT_TIMEOUT_LORA;
+        tasks[static_cast<size_t>(TaskId::WEBSERVER)].timeoutMs      = WDT_TIMEOUT_WEBSERVER;
+        tasks[static_cast<size_t>(TaskId::DISPLAY_TASK)].timeoutMs   = WDT_TIMEOUT_DISPLAY;
 
         for (auto& t : tasks) {
             t.lastHeartbeat = millis();

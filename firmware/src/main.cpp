@@ -59,7 +59,7 @@ static bool initHardware() {
     Serial.println(F("[BOOT] I2C bus initialised (400 kHz)"));
 
     // --- SPI Bus (for FRAM and Display) -------------------------------------
-    SPI.begin(PIN_SPI_CLK, PIN_SPI_MISO, PIN_SPI_MOSI);
+    SPI.begin(PIN_SPI_SCK, PIN_SPI_MISO, PIN_SPI_MOSI);
     Serial.println(F("[BOOT] SPI bus initialised"));
 
     // --- UART1 for GNSS (Slot D) --------------------------------------------
@@ -408,7 +408,7 @@ void webServerTaskFn(void* param) {
 }
 
 void displayTaskFn(void* param) {
-    g_health.heartbeat(TaskId::DISPLAY, TaskState::INITIALISING, "Display init...");
+    g_health.heartbeat(TaskId::DISPLAY_TASK, TaskState::INITIALISING, "Display init...");
     Serial.println(F("[DISPLAY] Task starting"));
 
     // TODO: Instantiate the correct DisplayDriver based on build flag:
@@ -427,7 +427,7 @@ void displayTaskFn(void* param) {
         // TODO: driver.showBootScreen(g_health);
         Serial.println(F("[DISPLAY] Boot screen update"));
 
-        g_health.heartbeat(TaskId::DISPLAY, TaskState::WARMING_UP, "Boot screen");
+        g_health.heartbeat(TaskId::DISPLAY_TASK, TaskState::WARMING_UP, "Boot screen");
 
         // Wait for state change or periodic refresh
         xEventGroupWaitBits(
@@ -445,7 +445,7 @@ void displayTaskFn(void* param) {
 
         // TODO: driver.showDashboard(data, g_health);
 
-        g_health.heartbeat(TaskId::DISPLAY, TaskState::RUNNING, "Dashboard");
+        g_health.heartbeat(TaskId::DISPLAY_TASK, TaskState::RUNNING, "Dashboard");
 
         // Wait for event or periodic refresh
         // E-Ink: refresh every 5 minutes (slow, persistent)
