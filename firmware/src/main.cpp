@@ -11,6 +11,13 @@
 #include "config.h"
 #include "types.h"
 
+#include "storage/ring_buffer.h"
+#include "sensors/sensor_manager.h"
+#include "network/web_server.h"
+
+// Shared FRAM instance — created by sensorTask, used by webServer and loraTask
+FramRingBuffer* g_framPtr = nullptr;
+
 // Task function forward declarations
 void sensorTaskFn(void* param);
 void loraTaskFn(void* param);
@@ -54,7 +61,7 @@ static bool initHardware() {
     delay(100);  // Let rail stabilise
 
     // --- I2C Bus ------------------------------------------------------------
-    Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL);
+    Wire.begin(PIN_WIRE_SDA, PIN_WIRE_SCL);
     Wire.setClock(400000);  // 400 kHz fast mode
     Serial.println(F("[BOOT] I2C bus initialised (400 kHz)"));
 
@@ -88,7 +95,7 @@ static bool initHardware() {
             if (addr == PMSA003I_I2C_ADDR)  Serial.print(" (PMSA003I)");
             if (addr == RV3028_I2C_ADDR)    Serial.print(" (RV-3028 RTC)");
             if (addr == IO_EXPANDER_I2C_ADDR) Serial.print(" (MCP23017)");
-            if (addr == FT6336_I2C_ADDR)    Serial.print(" (FT6336 Touch)");
+            if (addr == 0x38)    Serial.print(" (FT6336 Touch)");  // Can't use original FT6336 if the display is set to TFT.  This should work either way.
             Serial.println();
         }
     }
@@ -277,58 +284,16 @@ void supervisorTaskFn(void* param) {
 // Each stub demonstrates the heartbeat pattern and basic lifecycle.
 
 void sensorTaskFn(void* param) {
-    g_health.heartbeat(TaskId::SENSOR, TaskState::INITIALISING, "Starting sensors...");
-    Serial.println(F("[SENSOR] Task starting"));
+    static FramRingBuffer fram(PIN_FRAM_CS);
+    fram.init();
+    g_framPtr = &fram;  // expose to other tasks
 
-    // TODO: Initialise BME680, VEML7700, PMSA003I, GNSS, RTC, FRAM
-    // Each sensor init should be wrapped in error handling:
-    //   if (!bme680.begin()) { log error; mark gas as unavailable; }
-    //   but continue with other sensors
-
-    g_health.heartbeat(TaskId::SENSOR, TaskState::WARMING_UP, "Sensors warming up...");
-
-    uint32_t warmupStart = millis();
-    uint32_t lastCollectionMs = 0;
+    static SensorManager sensors(fram, g_liveData, g_health, g_events);
+    sensors.init();
 
     while (true) {
-        uint32_t now = millis();
-
-        // --- Continuous sensor reads (every loop iteration) -----------------
-        // TODO: Parse GNSS NMEA from Serial1
-        // TODO: Read PMSA003I if data available
-        // TODO: Run BME680 forced measurement cycle
-
-        // --- Check warm-up status -------------------------------------------
-        bool pmReady = (now - warmupStart) >= WARMUP_PMSA003I_MS;
-        // bool gnssReady = gnss.fixValid;
-        // bool gasStable = (now - warmupStart) >= WARMUP_BME680_GAS_MS;
-
-        // Update status message for supervisor/display
-        if (!pmReady) {
-            uint32_t remaining = (WARMUP_PMSA003I_MS - (now - warmupStart)) / 1000;
-            char msg[48];
-            snprintf(msg, sizeof(msg), "PM warming up (%lus)", remaining);
-            g_health.heartbeat(TaskId::SENSOR, TaskState::WARMING_UP, msg);
-        } else {
-            g_health.heartbeat(TaskId::SENSOR, TaskState::RUNNING, "All sensors nominal");
-        }
-
-        // --- Collection cycle (every SENSOR_INTERVAL_MS) --------------------
-        if (now - lastCollectionMs >= SENSOR_INTERVAL_MS) {
-            lastCollectionMs = now;
-
-            // TODO: Read RTC timestamp
-            // TODO: Snapshot all cached readings into SensorRecord
-            // TODO: Write record to FRAM ring buffer
-            // TODO: Update LiveDataCache (g_liveData.update(...))
-
-            // Signal other tasks
-            xEventGroupSetBits(g_events, EVT_NEW_RECORD);
-
-            Serial.println(F("[SENSOR] Collection cycle complete"));
-        }
-
-        vTaskDelay(pdMS_TO_TICKS(250));  // ~4 Hz inner loop
+        sensors.tick();
+        vTaskDelay(pdMS_TO_TICKS(250));
     }
 }
 
@@ -377,32 +342,19 @@ void loraTaskFn(void* param) {
 }
 
 void webServerTaskFn(void* param) {
-    g_health.heartbeat(TaskId::WEBSERVER, TaskState::INITIALISING, "WiFi init...");
-    Serial.println(F("[WEBSERVER] Task starting"));
+    g_health.heartbeat(TaskId::WEBSERVER, TaskState::INITIALISING, "Waiting for FRAM...");
 
-    // TODO: Try STA mode first using stored credentials from NVS
-    // TODO: If STA fails after WIFI_AP_FALLBACK_MS, start AP mode
-    // TODO: Create AsyncWebServer on WEB_SERVER_PORT
-    // TODO: Register routes:
-    //   GET /           → serve index.html from LittleFS
-    //   GET /api/live   → g_liveData.snapshot() as JSON
-    //   GET /api/history?hours=N → read FRAM, downsample, return JSON
-    //   GET /api/status → system health as JSON
-    //   GET /api/config → current config as JSON
-    //   POST /api/config → update config, save to NVS
-    // TODO: Start captive portal DNS in AP mode
+    // Wait for sensor task to initialise FRAM
+    while (g_framPtr == nullptr) {
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
 
-    g_health.heartbeat(TaskId::WEBSERVER, TaskState::WARMING_UP, "Connecting WiFi...");
+    static WebServerManager web(g_liveData, g_health, *g_framPtr, g_events);
+    web.initWifi();
+    web.initServer();
 
     while (true) {
-        // The AsyncWebServer handles requests via callbacks on Core 1.
-        // This loop just monitors WiFi health and heartbeats.
-
-        // TODO: Check WiFi.status(), reconnect if dropped
-        // TODO: Update heartbeat with connection info
-
-        g_health.heartbeat(TaskId::WEBSERVER, TaskState::RUNNING, "WiFi connected");
-
+        web.tick();
         vTaskDelay(pdMS_TO_TICKS(5000));
     }
 }

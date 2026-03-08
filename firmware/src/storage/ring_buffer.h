@@ -1,10 +1,13 @@
 // =============================================================================
 // storage/ring_buffer.h — FRAM-backed circular buffer with LoRa backfill
+// Thread-safe: all SPI access protected by FreeRTOS mutex
 // =============================================================================
 #pragma once
 
 #include <Arduino.h>
 #include <SPI.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 #include "../config.h"
 
 // =============================================================================
@@ -21,13 +24,13 @@ namespace FramCmd {
 }
 
 // =============================================================================
-// FRAM Ring Buffer
+// FRAM Ring Buffer — thread-safe via FreeRTOS mutex
 // =============================================================================
 
 class FramRingBuffer {
 public:
     FramRingBuffer(uint8_t csPin, SPIClass& spi = SPI)
-        : _csPin(csPin), _spi(spi), _initialised(false) {}
+        : _csPin(csPin), _spi(spi), _initialised(false), _mutex(nullptr) {}
 
     // --- Lifecycle -----------------------------------------------------------
 
@@ -35,14 +38,26 @@ public:
         pinMode(_csPin, OUTPUT);
         digitalWrite(_csPin, HIGH);
 
+        // Create SPI access mutex
+        _mutex = xSemaphoreCreateMutex();
+        if (_mutex == nullptr) {
+            Serial.println(F("[FRAM] ERROR: Failed to create SPI mutex"));
+            return false;
+        }
+
         // Verify FRAM is present by reading device ID
+        _lock();
         uint8_t mfgId[3];
         _readId(mfgId);
+        _unlock();
+
         Serial.printf("[FRAM] Device ID: %02X %02X %02X\n",
                       mfgId[0], mfgId[1], mfgId[2]);
 
         // Read existing header
+        _lock();
         _readBytes(0, reinterpret_cast<uint8_t*>(&_header), sizeof(FramHeader));
+        _unlock();
 
         if (_header.magic != FRAM_MAGIC) {
             Serial.println(F("[FRAM] No valid header found — formatting"));
@@ -66,14 +81,18 @@ public:
         _header.totalWrites = 0;
         _header.lastLoRaSendIndex = 0;
         _header.lastLoRaSendTime = 0;
+
+        _lock();
         _writeHeader();
+        _unlock();
+
         Serial.println(F("[FRAM] Formatted"));
     }
 
     // --- Record Operations ---------------------------------------------------
 
     bool writeRecord(const SensorRecord& record) {
-        if (!_initialised) return false;
+        if (!_initialised || !_lock()) return false;
 
         uint32_t addr = _recordAddress(_header.writeIndex);
         _writeBytes(addr, reinterpret_cast<const uint8_t*>(&record),
@@ -86,29 +105,33 @@ public:
         _header.totalWrites++;
         _writeHeader();
 
+        _unlock();
         return true;
     }
 
-    bool readRecord(uint32_t index, SensorRecord& record) const {
+    bool readRecord(uint32_t index, SensorRecord& record) {
         if (!_initialised || index >= FRAM_MAX_RECORDS) return false;
+        if (!_lock()) return false;
 
         uint32_t addr = _recordAddress(index);
         _readBytes(addr, reinterpret_cast<uint8_t*>(&record),
                    sizeof(SensorRecord));
+
+        _unlock();
         return true;
     }
 
     // --- Query Operations ----------------------------------------------------
 
     // Get the N most recent records (oldest first)
-    uint32_t getLatestRecords(SensorRecord* buffer, uint32_t maxCount) const {
+    uint32_t getLatestRecords(SensorRecord* buffer, uint32_t maxCount) {
         if (!_initialised || _header.recordCount == 0) return 0;
+        if (!_lock()) return 0;
 
         uint32_t count = min(maxCount, _header.recordCount);
         uint32_t startIdx;
 
         if (_header.recordCount <= count) {
-            // Buffer hasn't wrapped or we want everything
             startIdx = (_header.writeIndex + FRAM_MAX_RECORDS - _header.recordCount)
                        % FRAM_MAX_RECORDS;
         } else {
@@ -118,55 +141,70 @@ public:
 
         for (uint32_t i = 0; i < count; i++) {
             uint32_t idx = (startIdx + i) % FRAM_MAX_RECORDS;
-            readRecord(idx, buffer[i]);
+            uint32_t addr = _recordAddress(idx);
+            _readBytes(addr, reinterpret_cast<uint8_t*>(&buffer[i]),
+                       sizeof(SensorRecord));
         }
 
+        _unlock();
         return count;
     }
 
     // Get records since a specific ring buffer index (for LoRa backfill)
     uint32_t getRecordsSince(uint32_t sinceIndex, SensorRecord* buffer,
-                             uint32_t maxCount) const {
+                             uint32_t maxCount) {
         if (!_initialised || _header.recordCount == 0) return 0;
+        if (!_lock()) return 0;
 
-        // Calculate how many records have been written since sinceIndex
-        uint32_t pending = pendingLoRaRecords();
+        uint32_t pending = _pendingLoRaRecordsUnlocked();
         uint32_t count = min(maxCount, pending);
 
         for (uint32_t i = 0; i < count; i++) {
             uint32_t idx = (sinceIndex + i) % FRAM_MAX_RECORDS;
-            readRecord(idx, buffer[i]);
+            uint32_t addr = _recordAddress(idx);
+            _readBytes(addr, reinterpret_cast<uint8_t*>(&buffer[i]),
+                       sizeof(SensorRecord));
         }
 
+        _unlock();
         return count;
     }
 
     // --- LoRa Backfill Management --------------------------------------------
 
-    uint32_t pendingLoRaRecords() const {
-        if (_header.recordCount == 0) return 0;
-
-        // If the write index has wrapped past the send index, calculate
-        // correctly using modular arithmetic
-        if (_header.writeIndex >= _header.lastLoRaSendIndex) {
-            return _header.writeIndex - _header.lastLoRaSendIndex;
-        } else {
-            return (FRAM_MAX_RECORDS - _header.lastLoRaSendIndex)
-                   + _header.writeIndex;
-        }
+    uint32_t pendingLoRaRecords() {
+        if (!_lock()) return 0;
+        uint32_t result = _pendingLoRaRecordsUnlocked();
+        _unlock();
+        return result;
     }
 
     void advanceLoRaSendIndex(uint32_t count) {
+        if (!_lock()) return;
+
         _header.lastLoRaSendIndex =
             (_header.lastLoRaSendIndex + count) % FRAM_MAX_RECORDS;
-        _header.lastLoRaSendTime = millis() / 1000;  // seconds for compactness
+        _header.lastLoRaSendTime = millis() / 1000;
         _writeHeader();
+
+        _unlock();
     }
 
-    uint32_t getLastLoRaSendIndex() const { return _header.lastLoRaSendIndex; }
-    uint32_t getLastLoRaSendTime() const  { return _header.lastLoRaSendTime; }
+    uint32_t getLastLoRaSendIndex() {
+        if (!_lock()) return 0;
+        uint32_t result = _header.lastLoRaSendIndex;
+        _unlock();
+        return result;
+    }
 
-    // --- Status --------------------------------------------------------------
+    uint32_t getLastLoRaSendTime() {
+        if (!_lock()) return 0;
+        uint32_t result = _header.lastLoRaSendTime;
+        _unlock();
+        return result;
+    }
+
+    // --- Status (read cached header values — no SPI needed) ------------------
 
     uint32_t recordCount() const     { return _header.recordCount; }
     uint32_t totalWrites() const     { return _header.totalWrites; }
@@ -177,10 +215,24 @@ public:
     bool     isInitialised() const   { return _initialised; }
 
 private:
-    uint8_t         _csPin;
-    SPIClass&       _spi;
-    bool            _initialised;
-    FramHeader      _header;
+    uint8_t             _csPin;
+    SPIClass&           _spi;
+    bool                _initialised;
+    FramHeader          _header;
+    SemaphoreHandle_t   _mutex;
+
+    // --- Mutex helpers -------------------------------------------------------
+
+    bool _lock(uint32_t timeoutMs = 200) {
+        if (_mutex == nullptr) return false;
+        return xSemaphoreTake(_mutex, pdMS_TO_TICKS(timeoutMs)) == pdTRUE;
+    }
+
+    void _unlock() {
+        if (_mutex != nullptr) xSemaphoreGive(_mutex);
+    }
+
+    // --- Internal helpers (call only while holding mutex) --------------------
 
     uint32_t _recordAddress(uint32_t index) const {
         return FRAM_HEADER_SIZE + (index * FRAM_RECORD_SIZE);
@@ -191,7 +243,17 @@ private:
                     sizeof(FramHeader));
     }
 
-    // --- Low-level SPI FRAM access -------------------------------------------
+    uint32_t _pendingLoRaRecordsUnlocked() const {
+        if (_header.recordCount == 0) return 0;
+        if (_header.writeIndex >= _header.lastLoRaSendIndex) {
+            return _header.writeIndex - _header.lastLoRaSendIndex;
+        } else {
+            return (FRAM_MAX_RECORDS - _header.lastLoRaSendIndex)
+                   + _header.writeIndex;
+        }
+    }
+
+    // --- Low-level SPI FRAM access (call only while holding mutex) -----------
 
     void _select() const   { digitalWrite(_csPin, LOW); }
     void _deselect() const { digitalWrite(_csPin, HIGH); }
@@ -205,7 +267,7 @@ private:
     void _readBytes(uint32_t addr, uint8_t* buffer, size_t len) const {
         _select();
         _spi.transfer(FramCmd::READ);
-        _spi.transfer((addr >> 16) & 0xFF);  // 3-byte address for 1MB
+        _spi.transfer((addr >> 16) & 0xFF);
         _spi.transfer((addr >> 8) & 0xFF);
         _spi.transfer(addr & 0xFF);
         for (size_t i = 0; i < len; i++) {
