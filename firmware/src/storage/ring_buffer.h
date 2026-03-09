@@ -204,6 +204,23 @@ public:
         return result;
     }
 
+    // Update LoRa marker to a specific index and timestamp
+    void updateLoRaMarker(uint32_t index, uint32_t timestamp) {
+        if (!_lock()) return;
+        _header.lastLoRaSendIndex = index;
+        _header.lastLoRaSendTime = timestamp;
+        _writeHeader();
+        _unlock();
+    }
+
+    // Get a copy of the header (for backfill calculations)
+    FramHeader getHeader() {
+        if (!_lock()) return _header;
+        FramHeader copy = _header;
+        _unlock();
+        return copy;
+    }
+
     // --- Status (read cached header values — no SPI needed) ------------------
 
     uint32_t recordCount() const     { return _header.recordCount; }

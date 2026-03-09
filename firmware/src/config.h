@@ -7,6 +7,18 @@
 #include <Arduino.h>
 
 // =============================================================================
+// Firmware / Geocoding Policy
+// =============================================================================
+
+// Geocoding policy (offline KD-tree based)
+constexpr uint32_t GEOCODER_CACHE_TTL_MS        = 30UL * 60UL * 1000UL; // 30 minutes minimum
+constexpr uint32_t GEOCODER_MOVE_THRESHOLD_M    = 100UL;                 // only refresh when moved >= 100m
+
+// Captive portal policy
+constexpr uint32_t CAPTIVE_PORTAL_TIMEOUT_MS    = 30UL * 60UL * 1000UL;  // auto-reboot after 30 min in AP setup mode
+constexpr uint16_t CAPTIVE_DNS_PORT             = 53;
+
+// =============================================================================
 // RAK3312 WisBlock Pin Definitions (RAK19011 Base Board)
 // Source: rakwireless/variants/rak3112/pins_arduino.h
 // =============================================================================
@@ -30,6 +42,9 @@
 
 // --- WisBlock IO Control ----------------------------------------------------
 #define PIN_3V3_S_EN            WB_IO2  // GPIO 14 — controls 3V3_S switched rail
+
+// --- System Monitoring (ADC) -----------------------------------------------
+#define ADC_TEMPERATURE_PIN     WB_A0   // GPIO 1 — ESP32-S3 internal temp sensor
 
 // --- FRAM SPI Chip Select (Slot F) ------------------------------------------
 // Slot F chip select maps to WB_A1 (GPIO 2) on RAK19011

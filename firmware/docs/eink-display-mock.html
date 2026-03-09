@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>E-Ink Display Mock (360×240, 3-color)</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #2a2a2a;
+      font-family: monospace;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .device-frame {
+      background: #1a1a1a;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    }
+    .screen {
+      width: 360px;
+      height: 240px;
+      background: #ffffff;
+      border: 2px solid #333;
+      position: relative;
+      font-family: 'Courier New', monospace;
+      font-size: 8px;
+      line-height: 1.2;
+      color: #000000;
+    }
+    .label {
+      position: absolute;
+      bottom: -25px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      color: #888;
+      font-size: 11px;
+      font-family: sans-serif;
+    }
+    .red-text { color: #cc0000; }
+    .view-toggle {
+      margin-bottom: 15px;
+      text-align: center;
+    }
+    .view-toggle button {
+      padding: 8px 16px;
+      margin: 0 5px;
+      background: #444;
+      color: #fff;
+      border: 1px solid #666;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: sans-serif;
+      font-size: 12px;
+    }
+    .view-toggle button.active {
+      background: #666;
+      border-color: #888;
+    }
+    .boot-screen, .dashboard-screen { display: none; }
+    .boot-screen.active, .dashboard-screen.active { display: block; }
+  </style>
+</head>
+<body>
+  <div class="device-frame">
+    <div class="view-toggle">
+      <button id="btn-boot" class="active">Boot Screen</button>
+      <button id="btn-dashboard">Dashboard</button>
+    </div>
+    <div class="screen">
+      <!-- Boot Screen -->
+      <svg class="boot-screen active" width="360" height="240" xmlns="http://www.w3.org/2000/svg">
+        <!-- Header box -->
+        <rect x="5" y="5" width="350" height="45" fill="none" stroke="#000" stroke-width="1"/>
+        <text x="60" y="22" font-size="14" font-weight="bold" fill="#000">WISBLOCK SENSOR HUB</text>
+        <text x="140" y="40" font-size="8" fill="#000">v0.1.0</text>
+
+        <!-- Initialization title -->
+        <text x="10" y="68" font-size="8" fill="#000">System Initialization:</text>
+
+        <!-- Progress bars -->
+        <!-- BME680 -->
+        <text x="10" y="88" font-size="8" fill="#000">BME680 (Environment)     [####################] OK</text>
+
+        <!-- PMSA003I -->
+        <text x="10" y="106" font-size="8" fill="#000">PMSA003I (Particulate)   [############--------]</text>
+        <text x="338" y="106" font-size="8" fill="#cc0000">...</text>
+
+        <!-- GNSS -->
+        <text x="10" y="124" font-size="8" fill="#000">GNSS (Position)          [--------------------] ---</text>
+
+        <!-- WiFi -->
+        <text x="10" y="142" font-size="8" fill="#000">WiFi Connection          [####################] OK</text>
+
+        <!-- LoRaWAN -->
+        <text x="10" y="160" font-size="8" fill="#000">LoRaWAN OTAA Join        [####################] OK</text>
+
+        <!-- Footer box -->
+        <rect x="5" y="205" width="350" height="30" fill="none" stroke="#000" stroke-width="1"/>
+        <text x="10" y="220" font-size="8" fill="#000">Status:</text>
+        <text x="50" y="220" font-size="8" fill="#cc0000">WARMING UP</text>
+      </svg>
+
+      <!-- Dashboard Screen -->
+      <svg class="dashboard-screen" width="360" height="240" xmlns="http://www.w3.org/2000/svg">
+        <!-- Status bar -->
+        <text x="5" y="10" font-size="7" fill="#000">WiFi:▂▄▆█ -61dBm  |  LoRa: OK  |  GPS: 8 SVs  |  FRAM: 2%</text>
+        <line x1="0" y1="20" x2="360" y2="20" stroke="#000" stroke-width="1"/>
+
+        <!-- Card 1: Environment -->
+        <rect x="5" y="25" width="350" height="55" fill="none" stroke="#000" stroke-width="1"/>
+        <text x="10" y="35" font-size="7" fill="#000">ENVIRONMENT</text>
+        <text x="10" y="52" font-size="20" font-weight="bold" fill="#000">23.7</text>
+        <text x="62" y="52" font-size="14" fill="#000">C</text>
+        <text x="150" y="50" font-size="7" fill="#000">Hum: 64.9%</text>
+        <text x="150" y="65" font-size="7" fill="#000">Press: 1012hPa</text>
+        <text x="260" y="50" font-size="7" fill="#000">VOC:</text>
+        <text x="260" y="62" font-size="7" fill="#000">Good</text>
+
+        <!-- Card 2: Particulate Matter -->
+        <rect x="5" y="85" width="170" height="45" fill="none" stroke="#000" stroke-width="1"/>
+        <text x="10" y="95" font-size="7" fill="#000">PARTICULATE MATTER</text>
+        <text x="10" y="108" font-size="7" fill="#000">PM2.5: 11 ug/m3</text>
+        <text x="10" y="121" font-size="7" fill="#000">PM10:  18 ug/m3</text>
+        <text x="115" y="115" font-size="7" fill="#000">[Good]</text>
+
+        <!-- Card 3: Light -->
+        <rect x="180" y="85" width="175" height="45" fill="none" stroke="#000" stroke-width="1"/>
+        <text x="185" y="95" font-size="7" fill="#000">LIGHT</text>
+        <text x="185" y="112" font-size="14" fill="#000">542</text>
+        <text x="220" y="112" font-size="7" fill="#000">lux</text>
+        <text x="185" y="125" font-size="7" fill="#000">Indoor</text>
+
+        <!-- Card 4: GNSS -->
+        <rect x="5" y="135" width="350" height="50" fill="none" stroke="#000" stroke-width="1"/>
+        <text x="10" y="145" font-size="7" fill="#000">GNSS POSITION</text>
+        <text x="10" y="160" font-size="7" fill="#000">Lat:  52.2297</text>
+        <text x="140" y="160" font-size="7" fill="#000">Lon:  21.0122</text>
+        <text x="10" y="175" font-size="7" fill="#000">Alt: 42m</text>
+        <text x="140" y="175" font-size="7" fill="#000">HDOP: 1.1</text>
+        <text x="220" y="175" font-size="7" fill="#000">Loc: Warsaw, Poland</text>
+
+        <!-- Card 5: System -->
+        <rect x="5" y="190" width="350" height="45" fill="none" stroke="#000" stroke-width="1"/>
+        <text x="10" y="200" font-size="7" fill="#000">SYSTEM</text>
+        <text x="10" y="215" font-size="7" fill="#000">FRAM: 712/34900 (2%)</text>
+        <text x="210" y="215" font-size="7" fill="#000">Batt: 3.82V</text>
+        <text x="10" y="228" font-size="7" fill="#000">Uptime: 4h 23m</text>
+        <text x="210" y="228" font-size="7" fill="#000">TX: 4m ago</text>
+      </svg>
+
+      <div class="label">RAK14000 E-Ink Display (360×240, 3-color)</div>
+    </div>
+  </div>
+
+  <script>
+    const btnBoot = document.getElementById('btn-boot');
+    const btnDashboard = document.getElementById('btn-dashboard');
+    const bootScreen = document.querySelector('.boot-screen');
+    const dashboardScreen = document.querySelector('.dashboard-screen');
+
+    btnBoot.addEventListener('click', () => {
+      bootScreen.classList.add('active');
+      dashboardScreen.classList.remove('active');
+      btnBoot.classList.add('active');
+      btnDashboard.classList.remove('active');
+    });
+
+    btnDashboard.addEventListener('click', () => {
+      bootScreen.classList.remove('active');
+      dashboardScreen.classList.add('active');
+      btnBoot.classList.remove('active');
+      btnDashboard.classList.add('active');
+    });
+  </script>
+</body>
+</html>

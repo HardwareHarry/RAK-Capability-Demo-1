@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TFT LCD Display Mock (240×320, 16-bit color)</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #2a2a2a;
+      font-family: sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .device-frame {
+      background: #1a1a1a;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    }
+    .screen {
+      width: 240px;
+      height: 320px;
+      background: #0a0e1a;
+      border: 2px solid #333;
+      position: relative;
+      font-family: 'Arial', sans-serif;
+      overflow: hidden;
+    }
+    .label {
+      position: absolute;
+      bottom: -25px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      color: #888;
+      font-size: 11px;
+    }
+    .view-toggle {
+      margin-bottom: 15px;
+      text-align: center;
+    }
+    .view-toggle button {
+      padding: 8px 16px;
+      margin: 0 5px;
+      background: #444;
+      color: #fff;
+      border: 1px solid #666;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .view-toggle button.active {
+      background: #666;
+      border-color: #888;
+    }
+    .boot-screen, .dashboard-screen { display: none; }
+    .boot-screen.active, .dashboard-screen.active { display: block; }
+
+    /* Boot Screen Styles */
+    .boot-screen {
+      width: 100%;
+      height: 100%;
+    }
+    .boot-header {
+      background: #111827;
+      border: 1px solid #1e293b;
+      padding: 8px 10px;
+      margin: 0;
+    }
+    .boot-title {
+      color: #f1f5f9;
+      font-size: 14px;
+      font-weight: bold;
+      text-align: center;
+      margin: 2px 0;
+    }
+    .boot-version {
+      color: #94a3b8;
+      font-size: 9px;
+      text-align: right;
+      margin: 2px 5px 0 0;
+    }
+    .boot-section {
+      color: #94a3b8;
+      font-size: 9px;
+      margin: 8px 10px 5px;
+    }
+    .task-item {
+      margin: 8px 10px;
+      font-size: 9px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .dot.green { background: #22c55e; box-shadow: 0 0 4px #22c55e; }
+    .dot.amber { background: #f59e0b; box-shadow: 0 0 4px #f59e0b; }
+    .dot.red { background: #ef4444; box-shadow: 0 0 4px #ef4444; }
+    .task-name {
+      color: #f1f5f9;
+      flex: 1;
+      min-width: 80px;
+    }
+    .progress-bar {
+      width: 70px;
+      height: 10px;
+      background: #0a0e1a;
+      border: 1px solid #1e293b;
+      border-radius: 2px;
+      overflow: hidden;
+      position: relative;
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: 1px;
+    }
+    .progress-fill.green { background: #22c55e; }
+    .progress-fill.amber { background: #f59e0b; }
+    .task-status {
+      width: 25px;
+      font-size: 9px;
+      text-align: center;
+    }
+    .status-ok { color: #22c55e; }
+    .status-wait { color: #f59e0b; }
+    .status-none { color: #64748b; }
+    .boot-footer {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #111827;
+      border: 1px solid #1e293b;
+      padding: 10px;
+    }
+    .status-label {
+      color: #94a3b8;
+      font-size: 9px;
+      margin-bottom: 2px;
+    }
+    .status-value {
+      font-size: 14px;
+      font-weight: bold;
+      margin-bottom: 4px;
+    }
+    .status-value.ready { color: #22c55e; }
+    .status-value.warming { color: #f59e0b; }
+    .uptime-text {
+      color: #94a3b8;
+      font-size: 9px;
+    }
+
+    /* Dashboard Styles */
+    .dashboard-screen {
+      width: 100%;
+      height: 100%;
+    }
+    .dash-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 10px;
+      border-bottom: 1px solid #1e293b;
+    }
+    .dash-title {
+      color: #f1f5f9;
+      font-size: 14px;
+      font-weight: bold;
+    }
+    .dash-uptime {
+      color: #64748b;
+      font-size: 9px;
+    }
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #22c55e;
+      box-shadow: 0 0 6px #22c55e;
+    }
+    .card {
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      margin: 8px 10px;
+      background: #111827;
+    }
+    .card-header {
+      padding: 5px 8px;
+      border-bottom: 1px solid #1e293b;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .card-title {
+      color: #94a3b8;
+      font-size: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .card-badge {
+      font-size: 7px;
+      padding: 2px 6px;
+      border-radius: 8px;
+      font-weight: bold;
+    }
+    .badge-ok { background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid #166534; }
+    .badge-good { background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid #166534; }
+    .card-content {
+      padding: 8px;
+    }
+    .primary-value {
+      font-size: 24px;
+      font-weight: bold;
+      color: #e2e8f0;
+      font-family: 'Courier New', monospace;
+    }
+    .primary-value .unit {
+      font-size: 10px;
+      color: #64748b;
+      font-weight: normal;
+    }
+    .metric-row {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 4px;
+      font-size: 9px;
+    }
+    .metric-label {
+      color: #94a3b8;
+    }
+    .metric-value {
+      color: #f1f5f9;
+      font-family: 'Courier New', monospace;
+    }
+    .card.env .card-title::before { content: '■ '; color: #3b82f6; }
+    .card.pm .card-title::before { content: '■ '; color: #22c55e; }
+    .card.light .card-title::before { content: '■ '; color: #f59e0b; }
+    .card.system .card-title::before { content: '■ '; color: #a855f7; }
+    .card.gnss .card-title::before { content: '■ '; color: #06b6d4; }
+  </style>
+</head>
+<body>
+  <div class="device-frame">
+    <div class="view-toggle">
+      <button id="btn-boot" class="active">Boot Screen</button>
+      <button id="btn-dashboard">Dashboard</button>
+    </div>
+    <div class="screen">
+      <!-- Boot Screen -->
+      <div class="boot-screen active">
+        <div class="boot-header">
+          <div class="boot-title">WISBLOCK</div>
+          <div class="boot-title">SENSOR HUB</div>
+          <div class="boot-version">v0.1.0</div>
+        </div>
+
+        <div class="boot-section">System Initialization:</div>
+
+        <div class="task-item">
+          <div class="dot green"></div>
+          <div class="task-name">BME680 Environment</div>
+          <div class="progress-bar">
+            <div class="progress-fill green" style="width: 100%;"></div>
+          </div>
+          <div class="task-status status-ok">OK</div>
+        </div>
+
+        <div class="task-item">
+          <div class="dot amber"></div>
+          <div class="task-name">PMSA003I Particul.</div>
+          <div class="progress-bar">
+            <div class="progress-fill amber" style="width: 60%;"></div>
+          </div>
+          <div class="task-status status-wait">...</div>
+        </div>
+
+        <div class="task-item">
+          <div class="dot red"></div>
+          <div class="task-name">ZOE-M8Q GNSS</div>
+          <div class="progress-bar">
+            <div class="progress-fill red" style="width: 0%;"></div>
+          </div>
+          <div class="task-status status-none">---</div>
+        </div>
+
+        <div class="task-item">
+          <div class="dot green"></div>
+          <div class="task-name">WiFi Connection</div>
+          <div class="progress-bar">
+            <div class="progress-fill green" style="width: 100%;"></div>
+          </div>
+          <div class="task-status status-ok">OK</div>
+        </div>
+
+        <div class="task-item">
+          <div class="dot green"></div>
+          <div class="task-name">LoRaWAN OTAA Join</div>
+          <div class="progress-bar">
+            <div class="progress-fill green" style="width: 100%;"></div>
+          </div>
+          <div class="task-status status-ok">OK</div>
+        </div>
+
+        <div class="boot-footer">
+          <div class="status-label">Status:</div>
+          <div class="status-value warming">WARMING UP</div>
+          <div class="uptime-text">Uptime: 0h 4m</div>
+        </div>
+      </div>
+
+      <!-- Dashboard Screen -->
+      <div class="dashboard-screen">
+        <div class="dash-header">
+          <div class="dash-title">SENSOR HUB</div>
+          <div class="dash-uptime">Up: 4h</div>
+          <div class="status-dot"></div>
+        </div>
+
+        <div class="card env">
+          <div class="card-header">
+            <div class="card-title">Environment</div>
+            <div class="card-badge badge-ok">OK</div>
+          </div>
+          <div class="card-content">
+            <div class="primary-value">23.7<span class="unit"> °C</span></div>
+            <div class="metric-row">
+              <span class="metric-label">Hum</span>
+              <span class="metric-value">64.9%</span>
+              <span class="metric-label">Press</span>
+              <span class="metric-value">1012</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">VOC</span>
+              <span class="metric-value">Good</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card pm">
+          <div class="card-header">
+            <div class="card-title">Particulate</div>
+            <div class="card-badge badge-good">GOOD</div>
+          </div>
+          <div class="card-content">
+            <div class="metric-row">
+              <span class="metric-label">PM2.5</span>
+              <span class="metric-value">11</span>
+              <span class="metric-label">PM10</span>
+              <span class="metric-value">18</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-value">µg/m³</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card system">
+          <div class="card-header">
+            <div class="card-title">System</div>
+            <div class="card-badge badge-ok">2%</div>
+          </div>
+          <div class="card-content">
+            <div class="metric-row">
+              <span class="metric-label">WiFi</span>
+              <span class="metric-value">OK</span>
+              <span class="metric-label">LoRa</span>
+              <span class="metric-value">OK</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">FRAM</span>
+              <span class="metric-value">2%</span>
+              <span class="metric-label">Batt</span>
+              <span class="metric-value">3.82V</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card gnss">
+          <div class="card-header">
+            <div class="card-title">GNSS</div>
+            <div class="card-badge badge-ok">8</div>
+          </div>
+          <div class="card-content">
+            <div class="metric-row">
+              <span class="metric-value">52.23°N, 21.01°E</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">Alt</span>
+              <span class="metric-value">42m</span>
+              <span class="metric-label">HDOP</span>
+              <span class="metric-value">1.1</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">Location</span>
+              <span class="metric-value">Warsaw, Poland</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">Source</span>
+              <span class="metric-value">offline</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="label">RAK14014 TFT LCD (240×320, 16-bit color)</div>
+    </div>
+  </div>
+
+  <script>
+    const btnBoot = document.getElementById('btn-boot');
+    const btnDashboard = document.getElementById('btn-dashboard');
+    const bootScreen = document.querySelector('.boot-screen');
+    const dashboardScreen = document.querySelector('.dashboard-screen');
+
+    btnBoot.addEventListener('click', () => {
+      bootScreen.classList.add('active');
+      dashboardScreen.classList.remove('active');
+      btnBoot.classList.add('active');
+      btnDashboard.classList.remove('active');
+    });
+
+    btnDashboard.addEventListener('click', () => {
+      bootScreen.classList.remove('active');
+      dashboardScreen.classList.add('active');
+      btnBoot.classList.remove('active');
+      btnDashboard.classList.add('active');
+    });
+  </script>
+</body>
+</html>

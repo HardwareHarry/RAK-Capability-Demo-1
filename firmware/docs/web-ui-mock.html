@@ -1,0 +1,1204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WisBlock Sensor Hub</title>
+  <style>
+    /* ==========================================================================
+       WisBlock Sensor Hub Dashboard
+       Design: Industrial monitoring aesthetic — dark, precise, data-dense
+       Inspired by mission control displays and high-end SCADA interfaces
+       ========================================================================== */
+
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap');
+
+    :root {
+      /* Core palette — deep navy with electric accents */
+      --bg-primary: #0a0e1a;
+      --bg-card: #111827;
+      --bg-card-hover: #1a2235;
+      --bg-inset: #0d1220;
+      --border: #1e293b;
+      --border-accent: #334155;
+
+      /* Text hierarchy */
+      --text-primary: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --text-value: #e2e8f0;
+
+      /* Semantic colours */
+      --green: #22c55e;
+      --green-dim: #166534;
+      --green-glow: rgba(34, 197, 94, 0.15);
+      --red: #ef4444;
+      --red-dim: #991b1b;
+      --red-glow: rgba(239, 68, 68, 0.15);
+      --amber: #f59e0b;
+      --amber-dim: #92400e;
+      --amber-glow: rgba(245, 158, 11, 0.15);
+      --blue: #3b82f6;
+      --blue-dim: #1e3a5f;
+      --blue-glow: rgba(59, 130, 246, 0.12);
+      --cyan: #06b6d4;
+      --purple: #a855f7;
+
+      /* Spacing */
+      --gap: 12px;
+      --radius: 8px;
+      --radius-sm: 5px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Subtle background texture */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background:
+              radial-gradient(ellipse at 20% 50%, rgba(59, 130, 246, 0.03) 0%, transparent 50%),
+              radial-gradient(ellipse at 80% 20%, rgba(6, 182, 212, 0.02) 0%, transparent 50%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ---- Header ---- */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(17, 24, 39, 0.95), rgba(10, 14, 26, 0.98));
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(12px);
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .logo {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 700;
+      color: white;
+      letter-spacing: -0.5px;
+    }
+
+    .header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -0.3px;
+    }
+
+    .header h1 span {
+      color: var(--text-muted);
+      font-weight: 400;
+      font-size: 13px;
+      margin-left: 8px;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .system-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+      font-family: 'JetBrains Mono', monospace;
+      background: var(--bg-inset);
+      border: 1px solid var(--border);
+    }
+
+    .system-pill .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green);
+      animation: pulse-dot 2s infinite;
+    }
+
+    .system-pill.warning .dot { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+    .system-pill.error .dot { background: var(--red); box-shadow: 0 0 6px var(--red); animation: pulse-dot-fast 0.8s infinite; }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    @keyframes pulse-dot-fast {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .uptime {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* ---- Status Bar (connectivity indicators) ---- */
+    .status-bar {
+      display: flex;
+      gap: var(--gap);
+      padding: 10px 24px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-inset);
+      overflow-x: auto;
+    }
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      font-size: 12px;
+      white-space: nowrap;
+      transition: border-color 0.3s;
+    }
+
+    .status-item.ok { border-color: var(--green-dim); background: var(--green-glow); }
+    .status-item.warn { border-color: var(--amber-dim); background: var(--amber-glow); }
+    .status-item.err { border-color: var(--red-dim); background: var(--red-glow); }
+
+    .status-icon {
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .status-icon svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .status-label {
+      color: var(--text-secondary);
+      font-weight: 400;
+    }
+
+    .status-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    /* ---- WiFi signal strength bars ---- */
+    .wifi-bars {
+      display: flex;
+      align-items: flex-end;
+      gap: 2px;
+      height: 14px;
+    }
+
+    .wifi-bars .bar {
+      width: 3px;
+      border-radius: 1px;
+      background: var(--border-accent);
+      transition: background 0.3s, height 0.3s;
+    }
+
+    .wifi-bars .bar:nth-child(1) { height: 4px; }
+    .wifi-bars .bar:nth-child(2) { height: 7px; }
+    .wifi-bars .bar:nth-child(3) { height: 10px; }
+    .wifi-bars .bar:nth-child(4) { height: 14px; }
+
+    .wifi-bars.strength-4 .bar { background: var(--green); }
+    .wifi-bars.strength-3 .bar:nth-child(-n+3) { background: var(--green); }
+    .wifi-bars.strength-2 .bar:nth-child(-n+2) { background: var(--amber); }
+    .wifi-bars.strength-1 .bar:nth-child(1) { background: var(--red); }
+
+    /* ---- Main Grid ---- */
+    .dashboard {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: var(--gap);
+      padding: var(--gap) 24px 24px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ---- Card Base ---- */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      transition: border-color 0.3s, background 0.2s;
+    }
+
+    .card:hover {
+      border-color: var(--border-accent);
+      background: var(--bg-card-hover);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .card-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-title .icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card-badge {
+      font-size: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 500;
+    }
+
+    .badge-ok { background: var(--green-glow); color: var(--green); border: 1px solid var(--green-dim); }
+    .badge-warn { background: var(--amber-glow); color: var(--amber); border: 1px solid var(--amber-dim); }
+    .badge-err { background: var(--red-glow); color: var(--red); border: 1px solid var(--red-dim); }
+    .badge-info { background: var(--blue-glow); color: var(--blue); border: 1px solid var(--blue-dim); }
+
+    /* ---- Primary Value Display ---- */
+    .value-primary {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 36px;
+      font-weight: 600;
+      line-height: 1;
+      color: var(--text-value);
+      letter-spacing: -1px;
+    }
+
+    .value-primary .unit {
+      font-size: 16px;
+      font-weight: 400;
+      color: var(--text-muted);
+      margin-left: 4px;
+      letter-spacing: 0;
+    }
+
+    .value-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 16px;
+    }
+
+    .value-secondary {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      color: var(--text-secondary);
+      text-align: right;
+    }
+
+    .value-secondary .label {
+      font-family: 'Outfit', sans-serif;
+      font-size: 11px;
+      color: var(--text-muted);
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    /* ---- Metric Grid (for cards with multiple readings) ---- */
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .metric {
+      padding: 12px;
+      background: var(--bg-inset);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+    }
+
+    .metric .label {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .metric .value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 20px;
+      font-weight: 500;
+      color: var(--text-value);
+      line-height: 1;
+    }
+
+    .metric .value .unit {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 400;
+      margin-left: 3px;
+    }
+
+    .metric-grid.cols-3 {
+      grid-template-columns: 1fr 1fr 1fr;
+    }
+
+    /* ---- Mini Sparkline (CSS-only bar chart) ---- */
+    .sparkline {
+      display: flex;
+      align-items: flex-end;
+      gap: 1px;
+      height: 32px;
+      margin-top: 8px;
+    }
+
+    .sparkline .bar {
+      flex: 1;
+      background: var(--blue);
+      border-radius: 1px 1px 0 0;
+      min-height: 2px;
+      opacity: 0.6;
+      transition: opacity 0.2s, height 0.3s;
+    }
+
+    .sparkline .bar:last-child {
+      opacity: 1;
+    }
+
+    .sparkline .bar:hover {
+      opacity: 1;
+    }
+
+    /* ---- AQI Colour Band ---- */
+    .aqi-bar {
+      height: 4px;
+      border-radius: 2px;
+      margin-top: 12px;
+      background: linear-gradient(90deg,
+      var(--green) 0%, var(--green) 20%,
+      #eab308 20%, #eab308 40%,
+      var(--amber) 40%, var(--amber) 60%,
+      var(--red) 60%, var(--red) 80%,
+      var(--purple) 80%, var(--purple) 100%);
+      position: relative;
+    }
+
+    .aqi-bar .marker {
+      position: absolute;
+      top: -3px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: white;
+      border: 2px solid var(--bg-card);
+      transform: translateX(-50%);
+      transition: left 0.5s ease;
+      box-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
+    }
+
+    /* ---- GPS Card ---- */
+    .gps-coords {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 8px;
+      line-height: 1.6;
+    }
+
+    .gps-coords .coord-value {
+      color: var(--cyan);
+      font-weight: 500;
+    }
+
+    /* ---- System Resources Card ---- */
+    .resource-bar-container {
+      margin-bottom: 12px;
+    }
+
+    .resource-bar-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+
+    .resource-bar-label .name { color: var(--text-secondary); }
+    .resource-bar-label .pct { font-family: 'JetBrains Mono', monospace; color: var(--text-muted); }
+
+    .resource-bar {
+      height: 6px;
+      background: var(--bg-inset);
+      border-radius: 3px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    .resource-bar .fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.5s ease, background 0.3s;
+    }
+
+    .resource-bar .fill.low { background: var(--green); }
+    .resource-bar .fill.mid { background: var(--amber); }
+    .resource-bar .fill.high { background: var(--red); }
+
+    /* ---- Timestamp footer in cards ---- */
+    .card-footer {
+      margin-top: 12px;
+      padding-top: 8px;
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* ---- Loading / Error states ---- */
+    .loading-shimmer {
+      background: linear-gradient(90deg, var(--bg-inset) 25%, var(--bg-card) 50%, var(--bg-inset) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: var(--radius-sm);
+    }
+
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    .unavailable {
+      color: var(--text-muted);
+      font-style: italic;
+      font-size: 14px;
+    }
+
+    /* ---- Responsive ---- */
+    @media (max-width: 768px) {
+      .dashboard { padding: var(--gap) 12px 12px; }
+      .header { padding: 12px 16px; }
+      .status-bar { padding: 8px 16px; }
+      .value-primary { font-size: 28px; }
+      .metric .value { font-size: 16px; }
+      .metric-grid.cols-3 { grid-template-columns: 1fr 1fr; }
+    }
+
+    /* ---- Card span for wider cards ---- */
+    .card.wide { grid-column: span 2; }
+    @media (max-width: 768px) { .card.wide { grid-column: span 1; } }
+  </style>
+</head>
+<body>
+
+<!-- ===== Header ===== -->
+<header class="header">
+  <div class="header-left">
+    <div class="logo">WB</div>
+    <h1>Sensor Hub <span id="fw-version">v0.1.0</span></h1>
+  </div>
+  <div class="header-right">
+    <div class="system-pill" id="system-state">
+      <span class="dot"></span>
+      <span id="system-state-text">Connecting...</span>
+    </div>
+    <div class="uptime" id="uptime">--:--:--</div>
+  </div>
+</header>
+
+<!-- ===== Status Bar ===== -->
+<div class="status-bar" id="status-bar">
+  <!-- WiFi -->
+  <div class="status-item" id="status-wifi">
+    <div class="status-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/></svg>
+    </div>
+    <div class="wifi-bars strength-0" id="wifi-bars">
+      <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+    </div>
+    <span class="status-label">WiFi</span>
+    <span class="status-value" id="wifi-rssi">--</span>
+  </div>
+  <!-- LoRa -->
+  <div class="status-item" id="status-lora">
+    <div class="status-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5M16.2 7.8c2.3 2.3 2.3 6.1 0 8.4M19.1 4.9C23 8.8 23 15.1 19.1 19M12 12h.01"/></svg>
+    </div>
+    <span class="status-label">LoRa</span>
+    <span class="status-value" id="lora-status">--</span>
+  </div>
+  <!-- GNSS -->
+  <div class="status-item" id="status-gnss">
+    <div class="status-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L12 6M12 18L12 22M2 12L6 12M18 12L22 12M12 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0"/></svg>
+    </div>
+    <span class="status-label">GNSS</span>
+    <span class="status-value" id="gnss-sats">--</span>
+  </div>
+  <!-- FRAM -->
+  <div class="status-item" id="status-fram">
+    <div class="status-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M6 2v20M18 2v20M2 12h20"/></svg>
+    </div>
+    <span class="status-label">FRAM</span>
+    <span class="status-value" id="fram-usage">--</span>
+  </div>
+  <!-- Sensors -->
+  <div class="status-item" id="status-sensors">
+    <div class="status-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+    </div>
+    <span class="status-label">Sensors</span>
+    <span class="status-value" id="sensor-count">--</span>
+  </div>
+</div>
+
+<!-- ===== Dashboard Grid ===== -->
+<main class="dashboard" id="dashboard">
+
+  <!-- Temperature & Humidity -->
+  <div class="card" id="card-env">
+    <div class="card-header">
+      <div class="card-title">
+                <span class="icon" style="background:var(--blue-glow);color:var(--blue);">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>
+                </span>
+        Environment
+      </div>
+      <span class="card-badge badge-ok" id="env-badge">BME680</span>
+    </div>
+    <div class="value-row">
+      <div>
+        <div class="value-primary"><span id="temp-value">--.-</span><span class="unit">&deg;C</span></div>
+      </div>
+      <div class="value-secondary">
+        <span class="label">Humidity</span>
+        <span id="hum-value">--.-</span>%
+      </div>
+    </div>
+    <div class="metric-grid" style="margin-top: 14px;">
+      <div class="metric">
+        <div class="label">Pressure</div>
+        <div class="value"><span id="press-value">----.-</span><span class="unit">hPa</span></div>
+      </div>
+      <div class="metric">
+        <div class="label">Air Quality (VOC)</div>
+        <div class="value"><span id="gas-value">--</span><span class="unit" id="gas-unit">k&Omega;</span></div>
+      </div>
+    </div>
+    <div class="card-footer">
+      <span id="gas-status">Gas: stabilising</span>
+      <span id="env-updated">--</span>
+    </div>
+  </div>
+
+  <!-- Air Quality (PM) -->
+  <div class="card" id="card-pm">
+    <div class="card-header">
+      <div class="card-title">
+                <span class="icon" style="background:var(--amber-glow);color:var(--amber);">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="7" r="2"/><circle cx="17" cy="7" r="2"/><circle cx="12" cy="17" r="2"/><circle cx="4" cy="14" r="1.5"/><circle cx="20" cy="14" r="1.5"/></svg>
+                </span>
+        Particulate Matter
+      </div>
+      <span class="card-badge badge-ok" id="pm-badge">PMSA003I</span>
+    </div>
+    <div class="value-row">
+      <div>
+        <div class="value-primary"><span id="pm25-value">--</span><span class="unit">&micro;g/m&sup3;</span></div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">PM2.5</div>
+      </div>
+      <div style="text-align:right;">
+        <div class="value-secondary">
+          <span class="label">PM1.0</span>
+          <span id="pm10s-value">--</span> &micro;g/m&sup3;
+        </div>
+        <div class="value-secondary" style="margin-top:6px;">
+          <span class="label">PM10</span>
+          <span id="pm100-value">--</span> &micro;g/m&sup3;
+        </div>
+      </div>
+    </div>
+    <div class="aqi-bar">
+      <div class="marker" id="aqi-marker" style="left:5%;"></div>
+    </div>
+    <div class="card-footer">
+      <span id="aqi-label">--</span>
+      <span id="pm-updated">--</span>
+    </div>
+  </div>
+
+  <!-- Light -->
+  <div class="card" id="card-light">
+    <div class="card-header">
+      <div class="card-title">
+                <span class="icon" style="background:rgba(234,179,8,0.12);color:#eab308;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                </span>
+        Ambient Light
+      </div>
+      <span class="card-badge badge-ok" id="light-badge">VEML7700</span>
+    </div>
+    <div class="value-primary"><span id="lux-value">---.-</span><span class="unit">lux</span></div>
+    <div class="sparkline" id="lux-sparkline"></div>
+    <div class="card-footer">
+      <span id="light-label">--</span>
+      <span id="light-updated">--</span>
+    </div>
+  </div>
+
+  <!-- GNSS -->
+  <div class="card" id="card-gnss">
+    <div class="card-header">
+      <div class="card-title">
+                <span class="icon" style="background:rgba(6,182,212,0.12);color:var(--cyan);">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                </span>
+        GNSS Position
+      </div>
+      <span class="card-badge badge-info" id="gnss-badge">ZOE-M8Q</span>
+    </div>
+    <div class="metric-grid">
+      <div class="metric">
+        <div class="label">Satellites</div>
+        <div class="value"><span id="gnss-sat-count">--</span></div>
+      </div>
+      <div class="metric">
+        <div class="label">HDOP</div>
+        <div class="value"><span id="gnss-hdop">--</span></div>
+      </div>
+    </div>
+    <div class="gps-coords">
+      Lat: <span class="coord-value" id="gnss-lat">--.-------</span><br>
+      Lon: <span class="coord-value" id="gnss-lon">--.-------</span><br>
+      Alt: <span class="coord-value" id="gnss-alt">---</span> m
+    </div>
+    <div class="card-footer">
+      <span id="gnss-status">Searching...</span>
+      <span id="gnss-time">--:--:-- UTC</span>
+    </div>
+  </div>
+
+  <!-- System Resources -->
+  <div class="card" id="card-system">
+    <div class="card-header">
+      <div class="card-title">
+                <span class="icon" style="background:rgba(168,85,247,0.12);color:var(--purple);">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M15 2v2M15 20v2M9 2v2M9 20v2M2 15h2M2 9h2M20 15h2M20 9h2"/></svg>
+                </span>
+        System
+      </div>
+      <span class="card-badge badge-info" id="sys-badge">ESP32-S3</span>
+    </div>
+    <!-- FRAM Usage -->
+    <div class="resource-bar-container">
+      <div class="resource-bar-label">
+        <span class="name">FRAM Storage</span>
+        <span class="pct" id="fram-pct">--%</span>
+      </div>
+      <div class="resource-bar">
+        <div class="fill low" id="fram-bar" style="width: 0%;"></div>
+      </div>
+    </div>
+    <!-- Heap -->
+    <div class="resource-bar-container">
+      <div class="resource-bar-label">
+        <span class="name">Heap Memory</span>
+        <span class="pct" id="heap-pct">--%</span>
+      </div>
+      <div class="resource-bar">
+        <div class="fill low" id="heap-bar" style="width: 0%;"></div>
+      </div>
+    </div>
+    <!-- Battery -->
+    <div class="resource-bar-container">
+      <div class="resource-bar-label">
+        <span class="name">Battery</span>
+        <span class="pct" id="batt-voltage">-.- V</span>
+      </div>
+      <div class="resource-bar">
+        <div class="fill low" id="batt-bar" style="width: 0%;"></div>
+      </div>
+    </div>
+    <!-- LoRa Backlog -->
+    <div class="metric-grid" style="margin-top:8px;">
+      <div class="metric">
+        <div class="label">LoRa Backlog</div>
+        <div class="value"><span id="lora-backlog">0</span></div>
+      </div>
+      <div class="metric">
+        <div class="label">Last TX</div>
+        <div class="value" style="font-size:14px;"><span id="lora-last-tx">--</span></div>
+      </div>
+    </div>
+    <div class="card-footer">
+      <span id="sys-records">-- records</span>
+      <span id="sys-uptime">Uptime: --</span>
+    </div>
+  </div>
+
+</main>
+
+<!-- ===== JavaScript ===== -->
+<script>
+  (function() {
+    'use strict';
+
+    // --- Configuration ---
+    const POLL_INTERVAL = 3000;  // ms between API polls
+    const SPARKLINE_POINTS = 30; // number of bars in sparkline
+    const SENTINEL_U16 = 65535;
+    const SENTINEL_I16 = -32768;
+    const SENTINEL_U32 = 4294967295;
+    const SENTINEL_I32 = -2147483648;
+
+    // Sparkline history buffers
+    const luxHistory = [];
+
+    // --- Helper functions ---
+
+    function isAvailable(val, sentinel) {
+      return val !== undefined && val !== null && val !== sentinel;
+    }
+
+    function formatUptime(seconds) {
+      if (!seconds || seconds < 0) return '--:--:--';
+      const d = Math.floor(seconds / 86400);
+      const h = Math.floor((seconds % 86400) / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+      const s = seconds % 60;
+      if (d > 0) return d + 'd ' + h + 'h ' + m + 'm';
+      return String(h).padStart(2,'0') + ':' +
+              String(m).padStart(2,'0') + ':' +
+              String(s).padStart(2,'0');
+    }
+
+    function wifiStrength(rssi) {
+      if (rssi >= -50) return 4;
+      if (rssi >= -60) return 3;
+      if (rssi >= -70) return 2;
+      if (rssi >= -80) return 1;
+      return 0;
+    }
+
+    function setStatusClass(el, status) {
+      el.classList.remove('ok', 'warn', 'err');
+      el.classList.add(status);
+    }
+
+    function setBadge(el, text, cls) {
+      el.textContent = text;
+      el.className = 'card-badge badge-' + cls;
+    }
+
+    function setBarFill(el, pct) {
+      el.style.width = Math.min(100, Math.max(0, pct)) + '%';
+      el.classList.remove('low', 'mid', 'high');
+      if (pct > 80) el.classList.add('high');
+      else if (pct > 50) el.classList.add('mid');
+      else el.classList.add('low');
+    }
+
+    function updateSparkline(containerId, history, maxPoints) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+
+      // Ensure we have the right number of bars
+      while (container.children.length < maxPoints) {
+        const bar = document.createElement('div');
+        bar.className = 'bar';
+        container.appendChild(bar);
+      }
+      while (container.children.length > maxPoints) {
+        container.removeChild(container.lastChild);
+      }
+
+      if (history.length === 0) return;
+
+      const max = Math.max(...history, 1);
+      for (let i = 0; i < maxPoints; i++) {
+        const idx = history.length - maxPoints + i;
+        const val = idx >= 0 ? history[idx] : 0;
+        const pct = (val / max) * 100;
+        container.children[i].style.height = Math.max(2, pct) + '%';
+      }
+    }
+
+    function aqiPosition(pm25) {
+      // Map PM2.5 to 0-100% position on the AQI bar
+      // EPA breakpoints: 0-12 Good, 12-35 Moderate, 35-55 USG, 55-150 Unhealthy, 150+ Very Unhealthy
+      if (pm25 <= 12) return (pm25 / 12) * 20;
+      if (pm25 <= 35) return 20 + ((pm25 - 12) / 23) * 20;
+      if (pm25 <= 55) return 40 + ((pm25 - 35) / 20) * 20;
+      if (pm25 <= 150) return 60 + ((pm25 - 55) / 95) * 20;
+      return Math.min(100, 80 + ((pm25 - 150) / 100) * 20);
+    }
+
+    function lightLabel(lux) {
+      if (lux < 1) return 'Dark';
+      if (lux < 50) return 'Dim';
+      if (lux < 200) return 'Indoor';
+      if (lux < 500) return 'Bright indoor';
+      if (lux < 1000) return 'Overcast';
+      if (lux < 10000) return 'Daylight';
+      return 'Direct sun';
+    }
+
+    function timeAgo(epochSec) {
+      if (!epochSec) return '--';
+      const now = Math.floor(Date.now() / 1000);
+      const diff = now - epochSec;
+      if (diff < 60) return diff + 's ago';
+      if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+      if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+      return Math.floor(diff/86400) + 'd ago';
+    }
+
+    // --- Simulated API Data (for preview) ---
+
+    let simTime = Math.floor(Date.now() / 1000);
+    let simUptime = 16423;  // ~4.5 hours
+
+    async function fetchLive() {
+      simUptime += 3;
+      simTime += 3;
+      const baseTemp = 2345 + Math.round(Math.sin(simUptime / 300) * 50 + (Math.random() - 0.5) * 20);
+      const baseLux = Math.max(10, Math.round(2430 + Math.sin(simUptime / 600) * 800 + (Math.random() - 0.5) * 100));
+      return {
+        timestamp: simTime,
+        temperature: baseTemp,
+        humidity: 655 + Math.round((Math.random() - 0.5) * 30),
+        pressure: 10132 + Math.round((Math.random() - 0.5) * 10),
+        gas_resistance: 185000 + Math.round(Math.random() * 40000),
+        pm1_0: 4 + Math.round(Math.random() * 3),
+        pm2_5: 8 + Math.round(Math.random() * 5),
+        pm10: 14 + Math.round(Math.random() * 8),
+        lux: baseLux,
+        pm_ready: true,
+        gas_stable: simUptime > 300,
+        gnss: {
+          latitude: 509054321,
+          longitude: -14012345,
+          altitude: 42300,
+          satellites: 9,
+          hdop: 110,
+          fix_valid: true,
+          fix_age_ms: 1200,
+          hour: new Date().getUTCHours(),
+          minute: new Date().getUTCMinutes(),
+          second: new Date().getUTCSeconds()
+        },
+        battery_mv: 3870 + Math.round((Math.random() - 0.5) * 20),
+        wifi_rssi: -52 + Math.round((Math.random() - 0.5) * 10),
+        wifi_connected: true,
+        lora_joined: true,
+        lora_last_tx: simTime - 187,
+        lora_frame_count: 342,
+        fram_used: 712 + Math.floor(simUptime / 30),
+        fram_total: 34952
+      };
+    }
+
+    async function fetchStatus() {
+      return {
+        system_state: 'ready',
+        uptime_sec: simUptime,
+        fw_version: '0.1.0',
+        fw_name: 'WisBlock Sensor Hub',
+        display_type: 'E-Ink (RAK14000)',
+        free_heap: 180224,
+        total_heap: 327680,
+        free_psram: 7800000,
+        fram_records: 712 + Math.floor(simUptime / 30),
+        fram_capacity: 34952,
+        fram_total_writes: 712 + Math.floor(simUptime / 30),
+        lora_pending: 2,
+        tasks: [
+          { name: 'Sensor', state: 'Running', status: 'All sensors nominal', last_heartbeat_ms: 230, misses: 0 },
+          { name: 'LoRa', state: 'Running', status: 'Idle, next TX in 113s', last_heartbeat_ms: 1200, misses: 0 },
+          { name: 'WebServer', state: 'Running', status: 'AP: WisBlock-SensorHub (1 clients)', last_heartbeat_ms: 450, misses: 0 },
+          { name: 'Display', state: 'Running', status: 'Dashboard', last_heartbeat_ms: 3200, misses: 0 }
+        ],
+        wifi: { mode: 'AP', ssid: 'WisBlock-SensorHub', ip: '192.168.4.1', rssi: 0, clients: 1 }
+      };
+    }
+
+    // --- UI Update ---
+
+    function updateDashboard(live, status) {
+      if (!live) {
+        document.getElementById('system-state-text').textContent = 'Disconnected';
+        document.getElementById('system-state').className = 'system-pill error';
+        return;
+      }
+
+      // System state
+      const stateEl = document.getElementById('system-state');
+      const stateText = document.getElementById('system-state-text');
+      if (status) {
+        const sysState = status.system_state || 'unknown';
+        stateText.textContent = sysState.charAt(0).toUpperCase() + sysState.slice(1);
+        stateEl.className = 'system-pill' +
+                (sysState === 'ready' ? '' : sysState === 'degraded' ? ' warning' : ' error');
+      }
+
+      // Uptime
+      if (status && status.uptime_sec) {
+        document.getElementById('uptime').textContent = formatUptime(status.uptime_sec);
+        document.getElementById('sys-uptime').textContent = 'Uptime: ' + formatUptime(status.uptime_sec);
+      }
+
+      // --- WiFi ---
+      const wifiEl = document.getElementById('status-wifi');
+      const wifiBars = document.getElementById('wifi-bars');
+      if (live.wifi_connected) {
+        const strength = wifiStrength(live.wifi_rssi);
+        wifiBars.className = 'wifi-bars strength-' + strength;
+        document.getElementById('wifi-rssi').textContent = live.wifi_rssi + ' dBm';
+        setStatusClass(wifiEl, strength >= 2 ? 'ok' : 'warn');
+      } else {
+        wifiBars.className = 'wifi-bars strength-0';
+        document.getElementById('wifi-rssi').textContent = 'N/C';
+        setStatusClass(wifiEl, 'err');
+      }
+
+      // --- LoRa ---
+      const loraEl = document.getElementById('status-lora');
+      if (live.lora_joined) {
+        document.getElementById('lora-status').textContent = 'Joined';
+        setStatusClass(loraEl, 'ok');
+      } else {
+        document.getElementById('lora-status').textContent = 'Offline';
+        setStatusClass(loraEl, 'err');
+      }
+
+      // --- GNSS ---
+      const gnssEl = document.getElementById('status-gnss');
+      if (live.gnss && live.gnss.fix_valid) {
+        document.getElementById('gnss-sats').textContent = live.gnss.satellites + ' SVs';
+        setStatusClass(gnssEl, 'ok');
+        setBadge(document.getElementById('gnss-badge'), live.gnss.satellites + ' SVs', 'ok');
+      } else {
+        document.getElementById('gnss-sats').textContent = 'No fix';
+        setStatusClass(gnssEl, 'warn');
+        setBadge(document.getElementById('gnss-badge'), 'Searching', 'warn');
+      }
+
+      // --- FRAM ---
+      const framEl = document.getElementById('status-fram');
+      if (live.fram_total > 0) {
+        const pct = ((live.fram_used / live.fram_total) * 100).toFixed(1);
+        document.getElementById('fram-usage').textContent = pct + '%';
+        setStatusClass(framEl, pct < 80 ? 'ok' : pct < 95 ? 'warn' : 'err');
+      }
+
+      // --- Sensor count ---
+      let sensorOk = 0;
+      let sensorTotal = 5;
+      if (isAvailable(live.temperature, SENTINEL_I16)) sensorOk++;
+      if (isAvailable(live.lux, SENTINEL_U16)) sensorOk++;
+      if (live.pm_ready) sensorOk++;
+      if (live.gnss && live.gnss.fix_valid) sensorOk++;
+      if (live.gas_stable) sensorOk++;
+      document.getElementById('sensor-count').textContent = sensorOk + '/' + sensorTotal;
+      setStatusClass(document.getElementById('status-sensors'),
+              sensorOk === sensorTotal ? 'ok' : sensorOk >= 3 ? 'warn' : 'err');
+
+      // === Environment Card ===
+      if (isAvailable(live.temperature, SENTINEL_I16)) {
+        document.getElementById('temp-value').textContent = (live.temperature / 100).toFixed(1);
+      } else {
+        document.getElementById('temp-value').textContent = '--.-';
+      }
+
+      if (isAvailable(live.humidity, SENTINEL_U16)) {
+        document.getElementById('hum-value').textContent = (live.humidity / 10).toFixed(1);
+      } else {
+        document.getElementById('hum-value').textContent = '--.-';
+      }
+
+      if (isAvailable(live.pressure, SENTINEL_U16)) {
+        document.getElementById('press-value').textContent = (live.pressure / 10).toFixed(1);
+      } else {
+        document.getElementById('press-value').textContent = '----.-';
+      }
+
+      if (isAvailable(live.gas_resistance, SENTINEL_U32)) {
+        const kOhm = (live.gas_resistance / 1000).toFixed(1);
+        document.getElementById('gas-value').textContent = kOhm;
+      } else {
+        document.getElementById('gas-value').textContent = '--';
+      }
+
+      document.getElementById('gas-status').textContent =
+              live.gas_stable ? 'Gas: stable' : 'Gas: stabilising';
+
+      setBadge(document.getElementById('env-badge'),
+              isAvailable(live.temperature, SENTINEL_I16) ? 'BME680' : 'Offline',
+              isAvailable(live.temperature, SENTINEL_I16) ? 'ok' : 'err');
+
+      // === PM Card ===
+      if (isAvailable(live.pm2_5, SENTINEL_U16) && live.pm_ready) {
+        document.getElementById('pm25-value').textContent = live.pm2_5;
+        document.getElementById('pm10s-value').textContent =
+                isAvailable(live.pm1_0, SENTINEL_U16) ? live.pm1_0 : '--';
+        document.getElementById('pm100-value').textContent =
+                isAvailable(live.pm10, SENTINEL_U16) ? live.pm10 : '--';
+
+        const pos = aqiPosition(live.pm2_5);
+        document.getElementById('aqi-marker').style.left = pos + '%';
+
+        // AQI label
+        let aqiLabel = 'Good';
+        if (live.pm2_5 > 150) aqiLabel = 'Very Unhealthy';
+        else if (live.pm2_5 > 55) aqiLabel = 'Unhealthy';
+        else if (live.pm2_5 > 35) aqiLabel = 'Unhealthy (Sensitive)';
+        else if (live.pm2_5 > 12) aqiLabel = 'Moderate';
+        document.getElementById('aqi-label').textContent = aqiLabel;
+
+        setBadge(document.getElementById('pm-badge'), 'PMSA003I', 'ok');
+      } else {
+        document.getElementById('pm25-value').textContent = '--';
+        document.getElementById('aqi-label').textContent =
+                live.pm_ready === false ? 'Warming up...' : '--';
+        setBadge(document.getElementById('pm-badge'),
+                live.pm_ready === false ? 'Warming up' : 'Offline',
+                live.pm_ready === false ? 'warn' : 'err');
+      }
+
+      // === Light Card ===
+      if (isAvailable(live.lux, SENTINEL_U16)) {
+        const luxVal = live.lux / 10;
+        document.getElementById('lux-value').textContent = luxVal.toFixed(1);
+        document.getElementById('light-label').textContent = lightLabel(luxVal);
+        setBadge(document.getElementById('light-badge'), 'VEML7700', 'ok');
+
+        luxHistory.push(luxVal);
+        if (luxHistory.length > SPARKLINE_POINTS * 2) {
+          luxHistory.splice(0, luxHistory.length - SPARKLINE_POINTS);
+        }
+        updateSparkline('lux-sparkline', luxHistory, SPARKLINE_POINTS);
+      } else {
+        document.getElementById('lux-value').textContent = '---.-';
+        setBadge(document.getElementById('light-badge'), 'Offline', 'err');
+      }
+
+      // === GNSS Card ===
+      if (live.gnss) {
+        document.getElementById('gnss-sat-count').textContent =
+                live.gnss.satellites || '--';
+        document.getElementById('gnss-hdop').textContent =
+                live.gnss.hdop ? (live.gnss.hdop / 100).toFixed(1) : '--';
+
+        if (live.gnss.fix_valid && isAvailable(live.gnss.latitude, SENTINEL_I32)) {
+          document.getElementById('gnss-lat').textContent =
+                  (live.gnss.latitude / 1e7).toFixed(7);
+          document.getElementById('gnss-lon').textContent =
+                  (live.gnss.longitude / 1e7).toFixed(7);
+          document.getElementById('gnss-alt').textContent =
+                  live.gnss.altitude ? (live.gnss.altitude / 1000).toFixed(1) : '--';
+          document.getElementById('gnss-status').textContent = 'Fix valid';
+        } else {
+          document.getElementById('gnss-lat').textContent = '--.-------';
+          document.getElementById('gnss-lon').textContent = '--.-------';
+          document.getElementById('gnss-alt').textContent = '---';
+          document.getElementById('gnss-status').textContent = 'Searching...';
+        }
+
+        if (live.gnss.hour !== undefined) {
+          document.getElementById('gnss-time').textContent =
+                  String(live.gnss.hour).padStart(2,'0') + ':' +
+                  String(live.gnss.minute).padStart(2,'0') + ':' +
+                  String(live.gnss.second).padStart(2,'0') + ' UTC';
+        }
+      }
+
+      // === System Card ===
+      if (live.fram_total > 0) {
+        const framPct = ((live.fram_used / live.fram_total) * 100);
+        document.getElementById('fram-pct').textContent = framPct.toFixed(1) + '%';
+        setBarFill(document.getElementById('fram-bar'), framPct);
+        document.getElementById('sys-records').textContent = live.fram_used + ' records';
+      }
+
+      if (status && status.free_heap && status.total_heap) {
+        const heapUsed = ((1 - status.free_heap / status.total_heap) * 100);
+        document.getElementById('heap-pct').textContent = heapUsed.toFixed(0) + '%';
+        setBarFill(document.getElementById('heap-bar'), heapUsed);
+      }
+
+      if (isAvailable(live.battery_mv, SENTINEL_U16)) {
+        const v = live.battery_mv / 1000;
+        document.getElementById('batt-voltage').textContent = v.toFixed(2) + ' V';
+        // Map 3.0V-4.2V to 0-100%
+        const battPct = Math.max(0, Math.min(100, ((v - 3.0) / 1.2) * 100));
+        setBarFill(document.getElementById('batt-bar'), battPct);
+      }
+
+      // LoRa backlog
+      if (status && status.lora_pending !== undefined) {
+        document.getElementById('lora-backlog').textContent = status.lora_pending;
+      }
+      if (live.lora_last_tx) {
+        document.getElementById('lora-last-tx').textContent = timeAgo(live.lora_last_tx);
+      }
+    }
+
+    // --- Poll loop ---
+    async function poll() {
+      const [live, status] = await Promise.all([fetchLive(), fetchStatus()]);
+      updateDashboard(live, status);
+    }
+
+    // Initial poll then interval
+    poll();
+    setInterval(poll, POLL_INTERVAL);
+
+  })();
+</script>
+</body>
+</html>

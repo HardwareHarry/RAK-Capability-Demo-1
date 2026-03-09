@@ -86,11 +86,19 @@ struct SystemHealth {
     uint32_t            bootTime;           // millis() at boot
     uint32_t            lastRestartReason;  // stored in RTC memory across reboots
 
+    // ESP32-S3 Internal Temperature Monitoring (system health indicator)
+    int16_t             chipTemperatureC;   // degrees C × 100 (e.g., 4200 = 42.00°C)
+    uint32_t            lastTempReadMs;     // millis() of last temperature read
+    uint8_t             thermalThrottleState;  // 0=normal, 1=warm, 2=critical
+
     void init() {
         mutex = xSemaphoreCreateMutex();
         systemState = SystemState::BOOTING;
         bootTime = millis();
         lastRestartReason = 0;
+        chipTemperatureC = 0;
+        lastTempReadMs = 0;
+        thermalThrottleState = 0;
 
         // Configure per-task timeouts
         tasks[static_cast<size_t>(TaskId::SENSOR)].timeoutMs         = WDT_TIMEOUT_SENSOR;
@@ -133,6 +141,72 @@ struct SystemHealth {
 
     uint32_t uptimeSeconds() const {
         return (millis() - bootTime) / 1000;
+    }
+
+    // Read ESP32-S3 internal temperature via ADC and update thermal state
+    // Call periodically (e.g., every 5 seconds) from supervisor task
+    void updateChipTemperature() {
+        // ESP32-S3 internal temperature sensor (TSENS)
+        // Temperature ADC is on channel ADC1_CHANNEL_0 (GPIO 1)
+        // Output is approximately 0.5mV per degree C, offset to room temp
+        // Formula from IDF: T_celsius = (uint32_t)(adc_reading - 32) / 1.81 + 20.26
+
+        if (xSemaphoreTake(mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+            int raw = analogRead(ADC_TEMPERATURE_PIN);  // ADC1_CHANNEL_0 mapped
+
+            // Simple approximation (fine for monitoring purposes)
+            // ESP32-S3: ~1475 counts at 25°C, changes ~11 counts per °C
+            int temp_c = (int16_t)((raw - 1475) / 11 + 25) * 100;
+
+            chipTemperatureC = temp_c;
+            lastTempReadMs = millis();
+
+            // Determine thermal throttle state
+            // WARN: 75°C, CRITICAL: 85°C (ESP32 max rated is 125°C)
+            int16_t temp = temp_c / 100;  // Convert to integer °C
+            uint8_t oldState = thermalThrottleState;
+
+            if (temp >= 85) {
+                thermalThrottleState = 2;  // CRITICAL
+            } else if (temp >= 75) {
+                thermalThrottleState = 1;  // WARM
+            } else if (temp < 70) {
+                thermalThrottleState = 0;  // NORMAL
+            }
+            // Hysteresis: stay in WARM until below 70°C, CRITICAL until below 75°C
+
+            if (thermalThrottleState != oldState && thermalThrottleState > 0) {
+                if (thermalThrottleState == 1) {
+                    systemState = SystemState::DEGRADED;  // Throttle IO operations
+                } else if (thermalThrottleState == 2) {
+                    systemState = SystemState::ERROR;      // Critical condition
+                }
+            } else if (thermalThrottleState == 0 && systemState == SystemState::DEGRADED) {
+                systemState = SystemState::READY;          // Resume normal ops
+            }
+
+            xSemaphoreGive(mutex);
+        }
+    }
+
+    // Get current chip temperature (thread-safe)
+    int16_t getChipTemperatureC() {
+        int16_t temp = 0;
+        if (xSemaphoreTake(mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+            temp = chipTemperatureC;
+            xSemaphoreGive(mutex);
+        }
+        return temp / 100;  // Return as integer °C
+    }
+
+    // Get thermal throttle state: 0=normal, 1=warm/throttled, 2=critical
+    uint8_t getThermalState() {
+        uint8_t state = 0;
+        if (xSemaphoreTake(mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+            state = thermalThrottleState;
+            xSemaphoreGive(mutex);
+        }
+        return state;
     }
 };
 

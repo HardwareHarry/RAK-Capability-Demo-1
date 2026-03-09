@@ -14,6 +14,11 @@
 #include "storage/ring_buffer.h"
 #include "sensors/sensor_manager.h"
 #include "network/web_server.h"
+#include "network/lora_manager.h"
+#include "network/captive_portal.h"
+#include "display/display_factory.h"
+#include "ota_manager.h"
+#include "location/geocoder.h"
 
 // Shared FRAM instance — created by sensorTask, used by webServer and loraTask
 FramRingBuffer* g_framPtr = nullptr;
@@ -31,6 +36,10 @@ void supervisorTaskFn(void* param);
 SystemHealth     g_health;
 LiveDataCache    g_liveData;
 EventGroupHandle_t g_events;
+
+// Feature managers (initialized after boot)
+OTAManager*      g_otaManager = nullptr;
+Geocoder*        g_geocoder = nullptr;
 
 // Task handles (for supervisor monitoring and potential restart)
 TaskHandle_t     g_sensorTaskHandle    = nullptr;
@@ -202,16 +211,35 @@ void supervisorTaskFn(void* param) {
     // Feed the ESP32 hardware watchdog
     // esp_task_wdt_init() can be called here for TWDT if desired
 
+    uint32_t lastTempCheck = 0;  // Track temperature check timing
+
     while (true) {
         vTaskDelay(pdMS_TO_TICKS(2000));  // Check every 2 seconds
 
         uint32_t now = millis();
+
+        // --- Temperature Monitoring (every 5 seconds) ---
+        if (now - lastTempCheck >= 5000) {
+            lastTempCheck = now;
+            g_health.updateChipTemperature();
+
+            uint8_t thermalState = g_health.getThermalState();
+            if (thermalState > 0) {
+                int16_t temp = g_health.getChipTemperatureC();
+                const char* stateStr = (thermalState == 1) ? "WARM" : "CRITICAL";
+                Serial.printf("[SUPERVISOR] Thermal: %d°C - %s\n", temp, stateStr);
+            }
+        }
+
+        // --- Task Watchdog Monitoring ---
         bool allRunning = true;
         bool anyError = false;
 
         for (uint8_t i = 0; i < static_cast<uint8_t>(TaskId::TASK_COUNT); i++) {
             TaskId id = static_cast<TaskId>(i);
             auto& t = g_health.tasks[i];
+
+            // ...existing code...
 
             // Skip tasks that haven't started yet
             if (t.state == TaskState::NOT_STARTED) {
@@ -298,46 +326,83 @@ void sensorTaskFn(void* param) {
 }
 
 void loraTaskFn(void* param) {
-    g_health.heartbeat(TaskId::LORA, TaskState::INITIALISING, "LoRa init...");
-    Serial.println(F("[LORA] Task starting"));
+    g_health.heartbeat(TaskId::LORA, TaskState::INITIALISING, "Waiting for FRAM...");
 
-    // TODO: Initialise SX1262 via LMIC
-    // TODO: OTAA join attempt
-    // TODO: Update heartbeat with join status
+    // Wait for sensor task to initialise FRAM
+    while (g_framPtr == nullptr) {
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
 
-    g_health.heartbeat(TaskId::LORA, TaskState::WARMING_UP, "Joining network...");
+    static LoRaManager lora(*g_framPtr, g_liveData, g_health, g_events);
+
+    // Initialize radio
+    if (!lora.init()) {
+        Serial.println(F("[LORA] FATAL: Radio initialization failed"));
+        g_health.heartbeat(TaskId::LORA, TaskState::ERROR, "Init failed");
+        vTaskDelete(nullptr);  // Kill this task
+        return;
+    }
+
+    // Attempt OTAA join
+    g_health.heartbeat(TaskId::LORA, TaskState::WARMING_UP, "Joining...");
+
+    uint8_t joinAttempts = 0;
+    const uint8_t MAX_JOIN_ATTEMPTS = 3;
+
+    while (!lora.isJoined() && joinAttempts < MAX_JOIN_ATTEMPTS) {
+        joinAttempts++;
+        Serial.printf("[LORA] Join attempt %d/%d\n", joinAttempts, MAX_JOIN_ATTEMPTS);
+
+        if (lora.join(60000)) {
+            break;  // Join successful
+        }
+
+        // Wait before retry
+        if (joinAttempts < MAX_JOIN_ATTEMPTS) {
+            Serial.println(F("[LORA] Join failed, retrying in 30 seconds..."));
+            vTaskDelay(pdMS_TO_TICKS(30000));
+        }
+    }
+
+    if (!lora.isJoined()) {
+        Serial.println(F("[LORA] WARNING: Could not join network"));
+        Serial.println(F("[LORA] Will continue attempting in background"));
+        g_health.heartbeat(TaskId::LORA, TaskState::DEGRADED, "Not joined");
+    }
+
+    uint32_t lastJoinAttemptMs = millis();
+    const uint32_t REJOIN_INTERVAL_MS = 300000;  // Retry join every 5 minutes if not joined
 
     while (true) {
-        // Wait for new data or timeout
+        // If not joined, periodically retry
+        if (!lora.isJoined()) {
+            if (millis() - lastJoinAttemptMs >= REJOIN_INTERVAL_MS) {
+                Serial.println(F("[LORA] Attempting rejoin..."));
+                lora.join(60000);
+                lastJoinAttemptMs = millis();
+            }
+
+            // Heartbeat even when not joined
+            g_health.heartbeat(TaskId::LORA, TaskState::DEGRADED, "Not joined");
+            vTaskDelay(pdMS_TO_TICKS(30000));
+            continue;
+        }
+
+        // Wait for new data event or timeout
         EventBits_t bits = xEventGroupWaitBits(
             g_events, EVT_NEW_RECORD,
             pdTRUE,     // clear bits on exit
             pdFALSE,    // any bit
-            pdMS_TO_TICKS(30000)  // check in at least every 30s
+            pdMS_TO_TICKS(LORA_TX_INTERVAL_MS / 10)  // wake up periodically
         );
 
+        // Attempt transmission (will check internal timer)
+        if (lora.transmit()) {
+            Serial.println(F("[LORA] Transmission successful"));
+        }
+
+        // Heartbeat
         g_health.heartbeat(TaskId::LORA, TaskState::RUNNING, "Idle");
-
-        // TODO: Check if enough time has elapsed since last TX
-        // TODO: If so, read FRAM header to find lastLoRaSendIndex
-        // TODO: Calculate how many records have been written since then
-        // TODO: Pack current record as primary payload
-        // TODO: If missed records exist, pack up to LORAWAN_MAX_BACKFILL
-        //       as additional payloads (or a single larger payload with
-        //       a backfill indicator byte)
-        // TODO: Transmit via LMIC
-        // TODO: On TX_COMPLETE callback, update FRAM header with new
-        //       lastLoRaSendIndex and lastLoRaSendTime
-
-        // Backfill strategy:
-        //   1. Read FRAM header → lastLoRaSendIndex
-        //   2. Read FRAM header → current writeIndex
-        //   3. Calculate gap: missed = (writeIndex - lastLoRaSendIndex) % FRAM_MAX_RECORDS
-        //   4. If missed > 0, send current + min(missed, LORAWAN_MAX_BACKFILL)
-        //   5. Each TX carries a sequence counter so the backend knows ordering
-        //   6. On successful ACK, advance lastLoRaSendIndex by records sent
-
-        Serial.println(F("[LORA] Heartbeat"));
     }
 }
 
@@ -349,9 +414,20 @@ void webServerTaskFn(void* param) {
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 
+    // Initialize feature managers
+    if (!g_otaManager) {
+        g_otaManager = new OTAManager(g_health, nullptr);  // TODO: pass display driver
+        g_otaManager->init();
+        Serial.println(F("[OTA] Manager initialized"));
+    }
+
+    if (!g_geocoder) {
+        g_geocoder = new Geocoder();
+        Serial.println(F("[LOCATION] Geocoder initialized"));
+    }
+
     static WebServerManager web(g_liveData, g_health, *g_framPtr, g_events);
-    web.initWifi();
-    web.initServer();
+    web.init();
 
     while (true) {
         web.tick();
@@ -363,49 +439,60 @@ void displayTaskFn(void* param) {
     g_health.heartbeat(TaskId::DISPLAY_TASK, TaskState::INITIALISING, "Display init...");
     Serial.println(F("[DISPLAY] Task starting"));
 
-    // TODO: Instantiate the correct DisplayDriver based on build flag:
-    //   #if DISPLAY_EINK
-    //       EInkDisplay driver;
-    //   #elif DISPLAY_TFT
-    //       TftDisplay driver;
-    //   #endif
-    //   driver.init();
+    // Instantiate the display driver based on compile-time selection
+    #if defined(DISPLAY_EINK) && DISPLAY_EINK == 1
+        Serial.println(F("[DISPLAY] Using E-Ink driver (RAK14000)"));
+    #elif defined(DISPLAY_TFT) && DISPLAY_TFT == 1
+        Serial.println(F("[DISPLAY] Using TFT driver (RAK14014)"));
+    #endif
 
-    // --- Boot screen phase ---
-    // While system is BOOTING or WARMING_UP, repeatedly update boot screen
+    DisplayDriver* driver = createDisplay();
+
+    if (!driver || !driver->init()) {
+        g_health.heartbeat(TaskId::DISPLAY_TASK, TaskState::ERROR, "Init failed");
+        Serial.println(F("[DISPLAY] FATAL: Display initialization failed"));
+        vTaskDelete(nullptr);
+        return;
+    }
+
+    // --- Boot Phase: Show initialization progress ---
+    Serial.println(F("[DISPLAY] Boot screen phase"));
+    g_health.heartbeat(TaskId::DISPLAY_TASK, TaskState::INITIALISING, "Boot screen");
+
     while (g_health.systemState == SystemState::BOOTING ||
            g_health.systemState == SystemState::WARMING_UP) {
 
-        // TODO: driver.showBootScreen(g_health);
-        Serial.println(F("[DISPLAY] Boot screen update"));
-
-        g_health.heartbeat(TaskId::DISPLAY_TASK, TaskState::WARMING_UP, "Boot screen");
+        // Show boot screen with current system health
+        driver->showBootScreen(g_health);
 
         // Wait for state change or periodic refresh
+        uint32_t refreshMs = driver->isPersistent() ? 60000 : 1000;  // E-Ink: 60s, TFT: 1s
         xEventGroupWaitBits(
             g_events, EVT_STATE_CHANGE | EVT_DISPLAY_REFRESH,
             pdTRUE, pdFALSE,
-            pdMS_TO_TICKS(2000)  // refresh boot screen every 2s
+            pdMS_TO_TICKS(refreshMs)
         );
     }
 
-    // --- Live dashboard phase ---
+    // --- Dashboard Phase: Live monitoring ---
     Serial.println(F("[DISPLAY] Transitioning to live dashboard"));
+    g_health.heartbeat(TaskId::DISPLAY_TASK, TaskState::RUNNING, "Dashboard");
 
     while (true) {
         LiveData data = g_liveData.snapshot();
+        driver->showDashboard(data, g_health);
 
-        // TODO: driver.showDashboard(data, g_health);
-
+        // Update heartbeat
         g_health.heartbeat(TaskId::DISPLAY_TASK, TaskState::RUNNING, "Dashboard");
 
-        // Wait for event or periodic refresh
-        // E-Ink: refresh every 5 minutes (slow, persistent)
-        // TFT: refresh every 2-5 seconds (fast, volatile)
+        // Wait for new data or periodic refresh
+        // E-Ink: refresh every 5 minutes (low power priority)
+        // TFT: refresh every 2 seconds (responsive feel)
+        uint32_t refreshMs = driver->isPersistent() ? DISPLAY_REFRESH_INTERVAL_MS : 2000;
         xEventGroupWaitBits(
             g_events, EVT_DISPLAY_REFRESH | EVT_NEW_RECORD,
             pdTRUE, pdFALSE,
-            pdMS_TO_TICKS(DISPLAY_REFRESH_INTERVAL_MS)
+            pdMS_TO_TICKS(refreshMs)
         );
     }
 }

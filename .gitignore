@@ -20,3 +20,6 @@ firmware/src/secrets.h
 
 # Ignore build logs
 build*.log
+
+# Raw map data
+town-city-country-data/*.zip

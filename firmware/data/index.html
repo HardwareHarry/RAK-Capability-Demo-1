@@ -717,6 +717,11 @@ body::before {
             Lon: <span class="coord-value" id="gnss-lon">--.-------</span><br>
             Alt: <span class="coord-value" id="gnss-alt">---</span> m
         </div>
+        <div class="metric" style="margin-top:10px;">
+            <div class="label">Location Name</div>
+            <div class="value" style="font-size:14px;"><span id="gnss-location-name">--</span></div>
+            <div class="label" style="margin-top:6px;">Source: <span id="gnss-location-source">none</span></div>
+        </div>
         <div class="card-footer">
             <span id="gnss-status">Searching...</span>
             <span id="gnss-time">--:--:-- UTC</span>
@@ -1101,6 +1106,15 @@ body::before {
                 document.getElementById('gnss-lon').textContent = '--.-------';
                 document.getElementById('gnss-alt').textContent = '---';
                 document.getElementById('gnss-status').textContent = 'Searching...';
+            }
+
+            // Human-friendly reverse-geocoded location
+            if (live.location && live.location.name) {
+                document.getElementById('gnss-location-name').textContent = live.location.name;
+                document.getElementById('gnss-location-source').textContent = live.location.source || 'none';
+            } else {
+                document.getElementById('gnss-location-name').textContent = '--';
+                document.getElementById('gnss-location-source').textContent = 'none';
             }
 
             if (live.gnss.hour !== undefined) {

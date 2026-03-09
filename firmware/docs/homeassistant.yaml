@@ -1,0 +1,127 @@
+# =============================================================================
+# Home Assistant — WisBlock Sensor Hub Integration
+# Add this to your configuration.yaml
+# =============================================================================
+#
+# The sensor hub exposes a REST API that Home Assistant can poll directly.
+# No ESPHome integration needed — this uses HA's built-in RESTful platform.
+#
+# The device is discoverable via mDNS as sensorhub.local
+# Alternatively, use the device's IP address.
+#
+# API Endpoints:
+#   GET http://sensorhub.local/api/live    — current sensor readings
+#   GET http://sensorhub.local/api/status  — system health and metadata
+#   GET http://sensorhub.local/api/config  — device configuration
+#   GET http://sensorhub.local/api/wifi    — WiFi connection status
+
+rest:
+  - resource: http://sensorhub.local/api/live
+    scan_interval: 30
+    sensor:
+      - name: "Sensor Hub Temperature"
+        value_template: "{{ (value_json.temperature / 100) | round(1) }}"
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+
+      - name: "Sensor Hub Humidity"
+        value_template: "{{ (value_json.humidity / 10) | round(1) }}"
+        unit_of_measurement: "%"
+        device_class: humidity
+        state_class: measurement
+
+      - name: "Sensor Hub Pressure"
+        value_template: "{{ (value_json.pressure / 10) | round(1) }}"
+        unit_of_measurement: "hPa"
+        device_class: atmospheric_pressure
+        state_class: measurement
+
+      - name: "Sensor Hub PM2.5"
+        value_template: "{{ value_json.pm2_5 if value_json.pm_ready else 'unavailable' }}"
+        unit_of_measurement: "µg/m³"
+        device_class: pm25
+        state_class: measurement
+
+      - name: "Sensor Hub PM10"
+        value_template: "{{ value_json.pm10 if value_json.pm_ready else 'unavailable' }}"
+        unit_of_measurement: "µg/m³"
+        device_class: pm10
+        state_class: measurement
+
+      - name: "Sensor Hub PM1.0"
+        value_template: "{{ value_json.pm1_0 if value_json.pm_ready else 'unavailable' }}"
+        unit_of_measurement: "µg/m³"
+        device_class: pm1
+        state_class: measurement
+
+      - name: "Sensor Hub Light"
+        value_template: "{{ (value_json.lux / 10) | round(1) }}"
+        unit_of_measurement: "lx"
+        device_class: illuminance
+        state_class: measurement
+
+      - name: "Sensor Hub VOC Gas Resistance"
+        value_template: "{{ (value_json.gas_resistance / 1000) | round(1) }}"
+        unit_of_measurement: "kΩ"
+        state_class: measurement
+
+      - name: "Sensor Hub Battery"
+        value_template: "{{ (value_json.battery_mv / 1000) | round(2) }}"
+        unit_of_measurement: "V"
+        device_class: voltage
+        state_class: measurement
+
+      - name: "Sensor Hub WiFi Signal"
+        value_template: "{{ value_json.wifi_rssi }}"
+        unit_of_measurement: "dBm"
+        device_class: signal_strength
+        state_class: measurement
+
+      - name: "Sensor Hub GNSS Satellites"
+        value_template: "{{ value_json.gnss.satellites if value_json.gnss.fix_valid else 0 }}"
+        unit_of_measurement: "SVs"
+        state_class: measurement
+
+      - name: "Sensor Hub GNSS Latitude"
+        value_template: "{{ (value_json.gnss.latitude / 10000000) | round(7) if value_json.gnss.fix_valid else 'unavailable' }}"
+
+      - name: "Sensor Hub GNSS Longitude"
+        value_template: "{{ (value_json.gnss.longitude / 10000000) | round(7) if value_json.gnss.fix_valid else 'unavailable' }}"
+
+    binary_sensor:
+      - name: "Sensor Hub LoRa Connected"
+        value_template: "{{ value_json.lora_joined }}"
+        device_class: connectivity
+
+      - name: "Sensor Hub GNSS Fix"
+        value_template: "{{ value_json.gnss.fix_valid }}"
+
+      - name: "Sensor Hub PM Sensor Ready"
+        value_template: "{{ value_json.pm_ready }}"
+
+      - name: "Sensor Hub Gas Sensor Stable"
+        value_template: "{{ value_json.gas_stable }}"
+
+  - resource: http://sensorhub.local/api/status
+    scan_interval: 60
+    sensor:
+      - name: "Sensor Hub Uptime"
+        value_template: "{{ value_json.uptime_sec }}"
+        unit_of_measurement: "s"
+        device_class: duration
+
+      - name: "Sensor Hub Free Heap"
+        value_template: "{{ (value_json.free_heap / 1024) | round(0) }}"
+        unit_of_measurement: "KB"
+
+      - name: "Sensor Hub FRAM Usage"
+        value_template: "{{ ((value_json.fram_records / value_json.fram_capacity) * 100) | round(1) }}"
+        unit_of_measurement: "%"
+
+      - name: "Sensor Hub LoRa Backlog"
+        value_template: "{{ value_json.lora_pending }}"
+        unit_of_measurement: "records"
+
+      - name: "Sensor Hub System State"
+        value_template: "{{ value_json.system_state }}"
